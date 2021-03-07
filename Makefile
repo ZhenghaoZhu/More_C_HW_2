@@ -46,7 +46,10 @@ clean:
 		rm -rf $(BLDD)
 
 wipe:
-		truncate -s 0 $(TFLD)/outFile.txt
+		rm -rf $(BLDD)
+		rm -rf $(EXEC)
+
+
 
 .PRECIOUS: $(BLDD)/*.d
 -include $(BLDD)/*.d
