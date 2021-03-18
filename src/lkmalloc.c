@@ -30,3 +30,11 @@ int lkfree(void **ptr, u_int flags){
     }
     return errno;
 }
+
+int lkreport(int fd, u_int flags){
+    return errno;
+}
+
+int lkFlagParser(u_int curFlags){
+    return errno;
+}

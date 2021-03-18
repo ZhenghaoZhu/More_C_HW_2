@@ -23,3 +23,8 @@
 #define LKR_ORPHAN_FREE 0x8
 #define LKR_DOUBLE_FREE 0x10
 #define LKR_APPROX 0x20
+
+// Functions
+int lkmalloc(u_int size, void **ptr, u_int flags);
+int lkfree(void **ptr, u_int flags);
+int lkreport(int fd, u_int flags);

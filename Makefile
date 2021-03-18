@@ -44,6 +44,7 @@ $(BLDD)/%.o: $(SRCD)/%.c
 
 clean:
 		rm -rf $(BLDD)
+		rm $(EXEC)
 
 wipe:
 		rm -rf $(BLDD)
