@@ -12,13 +12,13 @@ ALL_FUNCF := $(filter-out $(MAIN) $(AUX), $(ALL_OBJF))
 
 INC := -I $(INCD)
 
-CFLAGS := -g -O2 -Wall -Werror -Wno-unused-variable -Wno-unused-function -MMD
+CFLAGS := -g -O2 -Wall -Werror -Wno-unused-variable -Wno-unused-function -MMD -O $(shell pkg-config --cflags glib-2.0)
 COLORF := -DCOLOR
 DFLAGS := -g -DDEBUG -DCOLOR
 PRINT_STAMENTS := -DERROR -DSUCCESS -DWARN -DINFO
 
 STD := -std=gnu11
-LIBS := -lm pkg-config --cflags --libs gtk+-2.0
+LIBS := -lm $(shell pkg-config --libs glib-2.0)
 
 CFLAGS += $(STD)
 
@@ -41,6 +41,10 @@ $(EXEC): $(ALL_OBJF)
 
 $(BLDD)/%.o: $(SRCD)/%.c
 		$(CC) $(CFLAGS) $(INC) -c -o $@ $<
+
+depend:
+		make all
+		$(CC) -MD $(CFLAGS) $(INC) $(ALL_OBJF)
 
 clean:
 		rm -rf $(BLDD)
