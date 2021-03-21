@@ -18,22 +18,15 @@ GSList* free_node_ll = NULL;
 
 int main(int argc, char *argv[], char *envp[]){
     void* testMalloc;
-    void* testMalloc2;
-    lkmalloc(10, &testMalloc, 1);
-    lkmalloc(10, &testMalloc2, 0);
+    // void* testMalloc2;
+    lkmalloc(10, &testMalloc, 2);
     MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
     if(curPointer != NULL){
-        printf("%i \n", curPointer->sizeOrFlags);
+        printf("%i \n", curPointer->underPadding);
     } else {
         printf("Sadness \n");
     }
-    lkmalloc(20, &testMalloc, 24); // NOTE  Weird bug with this line and line 22, 10 + 20
-    curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
-    if(curPointer != NULL){
-        printf("%i \n", curPointer->sizeOrFlags);
-    } else {
-        printf("Sadness \n");
-    }
+    free(testMalloc);
     lkcleanup();
     return 0;
 }
@@ -61,12 +54,13 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
         lkinit();
     }
 
-    if(ptr != NULL && *ptr != NULL && existFlag){
+    if((ptr != NULL || *ptr != NULL) && existFlag){
         fprintf(stderr, "Error: Allocating new memory with non-null pointer not possible, please try again. \n");
         return -EINVAL;
     }
 
     if(reallocFlag){
+        // TODO  Need to add redzones if statements
         if(*ptr != NULL){
             fprintf(stderr, "Warning: Mallocing already allocated pointer, possible memory leak \n");
             void* tempPtr = realloc(*ptr, size);
@@ -105,47 +99,47 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
         }
     } else if(underFlag && overFlag) {
         if(initFlag){
-            *ptr = calloc(size) + 16;
+            *ptr = calloc(1, size + 16);
         } else {
-            *ptr = malloc(size) + 16;
+            *ptr = malloc(size + 16);
         }
         if(*ptr != NULL){
             void* tempPtr = *ptr;
             memset(tempPtr, 0x6b, 8);
-            tempPtr += (sizeof(char)*(size + 8));
+            tempPtr = *ptr + (sizeof(char)*(size + 8));
             memset(tempPtr, 0x5a, 8);
             *ptr = *ptr + (sizeof(char)*8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, true, false, false);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
         }
     } else if(underFlag) {
         if(initFlag){
-            *ptr = calloc(size) + 8;
+            *ptr = calloc(1, size + 8);
         } else {
-            *ptr = malloc(size) + 8;
+            *ptr = malloc(size + 8);
         }
         if(*ptr != NULL){
             void* tempPtr = *ptr;
             memset(tempPtr, 0x6b, 8);
             *ptr = *ptr + (sizeof(char)*8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, false, false, false);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
         }
     } else if(overFlag) {
         if(initFlag){
-            *ptr = calloc(size) + 8;
+            *ptr = calloc(1, size + 8);
         } else {
-            *ptr = malloc(size) + 8;
+            *ptr = malloc(size + 8);
         }
         if(*ptr != NULL){
             void* tempPtr = *ptr;
             tempPtr += (sizeof(char)*(size));
             memset(tempPtr, 0x5a, 8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, true, false, false);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
