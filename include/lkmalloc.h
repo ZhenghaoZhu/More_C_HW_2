@@ -33,29 +33,33 @@
 
 // Free types
 #define MATCH_FREE 0x1
-#define BAD_FREE 0x2
+#define MIDDLE_FREE 0x2
 #define ORPHAN_FREE 0x3
 #define DOUBLE_FREE 0x4
 #define APPROX_FREE 0x5
 
 // Lengths
 #define FILENAME_LENGTH 50
-#define FX_LENGTH       50
+#define FUNCNAME_LENGTH 50
 
 // Functions
 int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxName, int lineNum);
-int lkfree(void **ptr, u_int flags);
+int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNum);
 int lkreport(int fd, u_int flags);
 int lkinit();
 int lkcleanup();
-int addNodeToTree(void** curPtr, char* curFxName, char* curFileName, int curRecType, int curLineNum, int mallocedSize, int curSizeOrFlags, int curRetVal, bool curUnder, bool curOver, bool curMiddle, bool curOrphan);
-void freeKey(void* curKey);
+int addNodeToTable(void** curPtr, char* curFxName, char* curFileName, int curRecType, int curLineNum, int mallocedSize, int curSizeOrFlags, int curRetVal, bool curUnder, bool curOver);
+int ptrInMiddleOfBlock(void** curPtr);
+int freeNodeFromTable(void** curPtr);
+int addFreeToList(void** curPtr);
 void freeNode(void* curNode);
-int comparePointers(void** ptr1, void** ptr2);
 
 // Wrapper Functions
 #define lkmalloc(size, ptr, flags) \
     lkmalloc_def(size, ptr, flags, (char*)__FILE__, (char*)__func__, __LINE__); \
+
+#define lkfree(ptr, flags) \
+    lkfree_def(ptr, flags, (char*)__FILE__, (char*)__func__, __LINE__); \
     
 
 // Structs
@@ -63,7 +67,7 @@ typedef struct malloc_node_info {
     void* curPtr;
     void* endOfPtr;
     char fileName[FILENAME_LENGTH];
-    char fxName[FX_LENGTH];
+    char fxName[FUNCNAME_LENGTH];
     int recType;
     int lineNum;
     int sizeOrFlags;
@@ -71,13 +75,19 @@ typedef struct malloc_node_info {
     double timeStamp;
     bool underPadding;
     bool overPadding;
-    bool middleFree;
-    bool orphanFree;
+    
 } MALLOC_NODE_INFO;
 
 typedef struct free_node_info {
+    void* freedPtr;
+    char fileName[FILENAME_LENGTH];
+    char fxName[FUNCNAME_LENGTH];
     int freedMemory;
     int freeType;
+    int doubleFreeCount;
+    bool matchFree;
+    bool middleFree;
+    bool orphanFree;
     bool approxFree;
-    void* freedPtr;
+    bool reallocated;
 } FREE_NODE_INFO;

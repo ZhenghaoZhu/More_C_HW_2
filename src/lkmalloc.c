@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string.h>
 #include <glib.h>
+#include <sys/time.h>
 #include "lkmalloc.h"
 
 /* 
@@ -18,15 +19,25 @@ GSList* free_node_ll = NULL;
 
 int main(int argc, char *argv[], char *envp[]){
     void* testMalloc;
-    // void* testMalloc2;
-    lkmalloc(10, &testMalloc, 2);
+    void* testMalloc2;
+    void* testMalloc3;
+    lkmalloc(10, &testMalloc, 0);
     MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
     if(curPointer != NULL){
-        printf("%i \n", curPointer->underPadding);
+        printf("%i \n", curPointer->sizeOrFlags);
     } else {
         printf("Sadness \n");
     }
-    free(testMalloc);
+    lkmalloc(11, &testMalloc, 0x10);
+    curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
+    if(curPointer != NULL){
+        printf("%i \n", curPointer->sizeOrFlags);
+    } else {
+        printf("Sadness \n");
+    }
+    printf("Table size: %i \n", g_hash_table_size(mem_node_table));
+    void* approxMalloc = testMalloc + (sizeof(char)*9);
+    lkfree(&approxMalloc, 1);
     lkcleanup();
     return 0;
 }
@@ -39,6 +50,7 @@ int lkinit(){
 int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxName, int lineNum){
     int regFlag = 0, initFlag = flags & LKM_INIT, overFlag = flags & LKM_OVER, underFlag = flags & LKM_UNDER, existFlag = flags & LKM_EXIST, reallocFlag = flags & LKM_REALLOC;
     // printf("flags: %i reg: %i, init: %i, over: %i, under: %i, exist: %i, realloc: %i \n", flags, regFlag, initFlag, overFlag, underFlag, existFlag, reallocFlag);
+    // TODO  Double Malloc
     if(flags == 0){
         regFlag += 1;
     } else {
@@ -61,13 +73,13 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
 
     if(reallocFlag){
         // TODO  Need to add redzones if statements
-        if(*ptr != NULL){
+        if(g_hash_table_lookup(mem_node_table, *ptr) && *ptr != NULL){
             fprintf(stderr, "Warning: Mallocing already allocated pointer, possible memory leak \n");
             void* tempPtr = realloc(*ptr, size);
-            void* tempPtrPtr = &tempPtr;
-            if(g_hash_table_lookup(mem_node_table, *ptr) && tempPtr != NULL){
-                // g_hash_table_remove(mem_node_table, *ptr);
-                addNodeToTree(tempPtrPtr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+            if(tempPtr != NULL){
+                g_hash_table_remove(mem_node_table, *ptr);
+                addNodeToTable(&tempPtr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false);
+                *ptr = tempPtr;
                 return RETURN_SUCCESS;
             } else {
                 fprintf(stderr, "Error: There was an error trying to realloc, please try again. \n");
@@ -78,12 +90,14 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
             return -EINVAL;
         }
     }
+    
+    void* checkPtr = *ptr;
 
     if(!underFlag && !overFlag){
         if(initFlag){
             *ptr = calloc(1, size);
             if(*ptr != NULL){
-                addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+                addNodeToTable(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false);
             } else {
                 fprintf(stderr, "Error: There was an error trying to calloc, please try again. \n");
                 return -errno;
@@ -91,7 +105,7 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
         } else {
             *ptr = malloc(size);
             if(*ptr != NULL){
-                addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false, false, false);
+                addNodeToTable(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, false);
             } else {
                 fprintf(stderr, "Error: There was an error trying to malloc, please try again. \n");
                 return -errno;
@@ -109,7 +123,7 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
             tempPtr = *ptr + (sizeof(char)*(size + 8));
             memset(tempPtr, 0x5a, 8);
             *ptr = *ptr + (sizeof(char)*8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, true, false, false);
+            addNodeToTable(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, true);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
@@ -124,7 +138,7 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
             void* tempPtr = *ptr;
             memset(tempPtr, 0x6b, 8);
             *ptr = *ptr + (sizeof(char)*8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, false, false, false);
+            addNodeToTable(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, true, false);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
@@ -139,21 +153,25 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
             void* tempPtr = *ptr;
             tempPtr += (sizeof(char)*(size));
             memset(tempPtr, 0x5a, 8);
-            addNodeToTree(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, true, false, false);
+            addNodeToTable(ptr, (char*)fxName, (char*)fileName, NORMAL_ALLOC, lineNum, size, flags, 0, false, true);
         } else {
             fprintf(stderr, "Error: There was an error trying to calloc/malloc, please try again. \n");
             return -errno;
         }
     }
 
+    // if(checkPtr != NULL && !existFlag){
+        // TODO  Record memleak
+    // }
+
     if(*ptr != NULL){
-        // fprintf(stdout, "Success mallocing %p \n", *ptr);
         return RETURN_SUCCESS;
+    } else {
+        return -EINVAL;
     }
-    return -EINVAL;
 }
 
-int lkfree(void **ptr, u_int flags){
+int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNum){
     int regFlag = 0, approxFlag = flags & LKF_APPROX, warnFlag = flags & LKF_WARN, unknownFlag = flags & LKF_UNKNOWN, errorFlag = flags & LKF_ERROR;
     // printf("reg: %i, approx: %i, warn: %i, unknown: %i, error: %i \n", regFlag, approxFlag, warnFlag, unknownFlag, errorFlag);
 
@@ -166,37 +184,57 @@ int lkfree(void **ptr, u_int flags){
             return -EINVAL;
         }
     }
-
-    if(ptr == NULL || *ptr == NULL){
-        fprintf(stderr, "Unable to free pointer, please try again. \n");
-        if(unknownFlag){
-            fprintf(stderr, "Error: Tried to free NULL pointer \n");
-            if(errorFlag){
-                exit(EXIT_FAILURE);
-            }
-        }
-        
-        return -EINVAL;
-    }
-
-    // TODO  Search for given pointer in tree, if not found then UNKNOWN_FLAG
-
+    MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, *ptr);
+    // printf("ptr: %p, *ptr: %p, curPointer: %p", ptr, *ptr, curPointer);
+    
     if(approxFlag){
-        if(warnFlag){
+        int diff = ptrInMiddleOfBlock(ptr);
+        if(diff != -1){
+            void* tempPtr = *ptr - (sizeof(char)*diff);
+            freeNodeFromTable(tempPtr);
+            addFreeToList(tempPtr);
+            free(tempPtr);
+            if(warnFlag){
+                fprintf(stderr, "Warning: Freeing in the middle of an allocated block. \n");
+                if(errorFlag){
+                    exit(EXIT_FAILURE);
+                }
+                return RETURN_SUCCESS;
+            }
+        } else {
+            fprintf(stderr, "Error: Orphan free passed, pointer passed was never allocated. \n");
+            // TODO  Orphan free case
+        }
+    } else if(regFlag && curPointer != NULL) {
+        bool hasUnder = curPointer->underPadding;
+        bool hasOver = curPointer->overPadding;
+        void* tempPtr = *ptr;
+        if(hasUnder){
+            tempPtr = *ptr - (sizeof(char)*8);
+        }
+        freeNodeFromTable(ptr);
+        addFreeToList(ptr);
+        free(tempPtr);
+        return RETURN_SUCCESS;
+    }
+    
+    if(ptr == NULL || *ptr == NULL || curPointer == NULL){
+        if(unknownFlag){
+            fprintf(stderr, "Error: Tried to free pointer that was never allocated.\n");
+            fprintf(stderr, "Error: Orphan free passed, pointer passed was never allocated. \n");
+            // TODO  Orphan free case
             if(errorFlag){
-                fprintf(stderr, "Conditions of passed pointer matched LKF_WARN \n");
                 exit(EXIT_FAILURE);
             }
         }
-    } else if(regFlag) {
-        free(*ptr);
-        return RETURN_SUCCESS;
+        return -EINVAL;
     }
 
     return -errno;
 }
 
 int lkreport(int fd, u_int flags){
+    // NOTE  Difference between LKR_BAD_FREE and LKR_APPROX
     int noneFlag = 0, seriousFlag = flags & LKR_SERIOUS, matchFlag = flags & LKR_MATCH, badFreeFlag = flags & LKR_BAD_FREE, orphanFreeFlag = flags & LKR_ORPHAN_FREE, doubleFreeFlag = flags & LKR_DOUBLE_FREE, approxFlag = flags & LKR_APPROX;
     if(flags == 0){
         noneFlag += 1;
@@ -215,12 +253,34 @@ int lkFlagParser(u_int curFlags){
     return errno;
 }
 
+int ptrInMiddleOfBlock(void** curPtr){
+    if(g_hash_table_lookup(mem_node_table, *curPtr) != NULL){
+        return 0;
+    }
+    GHashTableIter iter;
+    gpointer key, value;
+    void* curStart;
+    void* curEnd;
+    MALLOC_NODE_INFO *curNode = NULL;
+    g_hash_table_iter_init(&iter, mem_node_table);
+    while(g_hash_table_iter_next(&iter,  &key, &value)){
+        curNode = (MALLOC_NODE_INFO*)value;
+        curStart = curNode->curPtr;
+        curEnd = curNode->endOfPtr;
+        if(*curPtr < curEnd && *curPtr > curStart){
+            return (int)(*curPtr - curStart);
+        }
+    }
+    return -1;
+}
+
 int lkcleanup(){
+    // TODO  Apply function to all keys first to free mallocs
     g_hash_table_destroy(mem_node_table);
     return 0;
 }
 
-int addNodeToTree(void** curPtr, char* curFxName, char* curFileName, int curRecType, int curLineNum, int mallocedSize, int curSizeOrFlags, int curRetVal, bool curUnder, bool curOver, bool curMiddle, bool curOrphan){
+int addNodeToTable(void** curPtr, char* curFxName, char* curFileName, int curRecType, int curLineNum, int mallocedSize, int curSizeOrFlags, int curRetVal, bool curUnder, bool curOver){
     MALLOC_NODE_INFO *curNode = g_new(MALLOC_NODE_INFO, 1);
     curNode->curPtr = *curPtr;
     curNode->endOfPtr = *curPtr + (sizeof(char) * mallocedSize);
@@ -237,17 +297,16 @@ int addNodeToTree(void** curPtr, char* curFxName, char* curFileName, int curRecT
     curNode->timeStamp = 0.0;
     curNode->underPadding = curUnder;
     curNode->overPadding = curOver;
-    curNode->middleFree = curMiddle;
-    curNode->orphanFree = curOrphan;
     g_hash_table_insert(mem_node_table, *curPtr, curNode);
     return 0;
 }
 
-void freeKey(void* curKey){
-    if(curKey) {
-        g_free(curKey);
-    }
-    return;
+int freeNodeFromTable(void** curPtr){
+    return 0;
+}
+
+int addFreeToList(void** curPtr){
+    return 0;
 }
 
 void freeNode(void* curNode){
@@ -259,14 +318,4 @@ void freeNode(void* curNode){
         g_free(curNode);
     }
     return;
-}
-
-int comparePointers(void** ptr1, void** ptr2){
-    if(*ptr1 > *ptr2){
-        return 1;
-    } else if(*ptr1 == *ptr2){
-        return 0;
-    } else {
-        return -1;
-    }
 }

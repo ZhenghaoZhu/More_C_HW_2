@@ -43,8 +43,8 @@ $(BLDD)/%.o: $(SRCD)/%.c
 		$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 depend:
-		make all
-		$(CC) -MD $(CFLAGS) $(INC) $(ALL_OBJF)
+		@make all
+		ar rcs liblkmalloc.a $(ALL_OBJF)
 
 clean:
 		rm -rf $(BLDD)
