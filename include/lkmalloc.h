@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <glib.h>
 
 #define RETURN_SUCCESS 0
 #define RETURN_FAILURE 1
@@ -50,6 +51,7 @@
 // Functions
 int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxName, int lineNum);
 int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNum, bool ending);
+void lkreport_wrapper(int stat, void* args);
 int lkreport(int fd, u_int flags);
 int lkinit();
 int lkcleanup();

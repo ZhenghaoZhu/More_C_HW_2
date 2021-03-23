@@ -3,3 +3,7 @@ lkmalloc
 *Test.sh
 test.csv
 liblkmalloc.a
+.vscode/settings.json
+output/*
+tests/*.a
+tests/*.o

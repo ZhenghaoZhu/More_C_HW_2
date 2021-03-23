@@ -2,7 +2,9 @@ CC := gcc
 SRCD := src
 BLDD := build
 INCD := include
-TFLD := testFiles
+BN := bin
+TS := tests
+# TFLD := testFiles
 
 MAIN  := $(BLDD)/main.o
 
@@ -12,7 +14,7 @@ ALL_FUNCF := $(filter-out $(MAIN) $(AUX), $(ALL_OBJF))
 
 INC := -I $(INCD)
 
-CFLAGS := -g -O2 -Wall -Werror -Wno-unused-variable -Wno-unused-function -MMD -O $(shell pkg-config --cflags glib-2.0)
+CFLAGS := -g -O2 -Wall -Werror -Wno-unused-variable -Wno-unused-function -MMD $(shell pkg-config --cflags glib-2.0)
 COLORF := -DCOLOR
 DFLAGS := -g -DDEBUG -DCOLOR
 PRINT_STAMENTS := -DERROR -DSUCCESS -DWARN -DINFO
@@ -24,7 +26,7 @@ CFLAGS += $(STD)
 
 EXEC := lkmalloc
 
-.PHONY: clean all setup debug
+.PHONY: clean all setup debug tests depend
 
 all: setup $(EXEC) 
 
@@ -43,17 +45,15 @@ $(BLDD)/%.o: $(SRCD)/%.c
 		$(CC) $(CFLAGS) $(INC) -c -o $@ $<
 
 depend:
-		@make all
-		ar rcs liblkmalloc.a $(ALL_OBJF)
+		make all
+		ar rcs tests/lkmalloc.a $(ALL_OBJF)
 
 clean:
 		rm -rf $(BLDD)
-		rm $(EXEC)
 
-wipe:
-		rm test.csv
-
-
+tests:
+		$(TS)/test1.sh 
+		$(TS)/test2.sh
 
 .PRECIOUS: $(BLDD)/*.d
 -include $(BLDD)/*.d

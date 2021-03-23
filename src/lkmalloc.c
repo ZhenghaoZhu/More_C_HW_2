@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "lkmalloc.h"
+#include "../include/lkmalloc.h"
 
 /* 
  * struct for pointers that have been freed, maybe a list of linked lists 
@@ -23,30 +23,6 @@ GSList* memleak_ll = NULL;
 GSList* bad_free_ll = NULL; 
 GSList* good_free_ll = NULL; 
 
-
-int main(int argc, char *argv[], char *envp[]){
-    void* testMalloc = NULL;
-    void* testMalloc2 = NULL;
-    void* testMalloc3 = NULL;
-    void* testMalloc4 = NULL;
-    lkmalloc(10, &testMalloc, 0);
-    lkmalloc(11, &testMalloc, 0);
-    lkmalloc(100, &testMalloc2, 0);
-    lkmalloc(200, &testMalloc2, 21);
-    lkmalloc(200, &testMalloc4, 6);
-    MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc4);
-    void* approxMalloc = testMalloc + (sizeof(char)*8);
-    lkfree(&approxMalloc, 1);
-    lkfree(&testMalloc2, 0);
-    lkfree(&testMalloc2, 0);
-    lkfree(&testMalloc3, 6);
-    lkfree(&testMalloc4, 0);
-    int fd = open("test.csv", O_WRONLY|O_CREAT, S_IRWXU);  
-    lkreport(fd, 0x33);
-    close(fd);
-    return 0;
-}
-
 int lkinit(){
     mem_node_table = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, freeNode);
     all_free = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, NULL);
@@ -55,8 +31,6 @@ int lkinit(){
 
 int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxName, int lineNum){
     int regFlag = 0, initFlag = flags & LKM_INIT, overFlag = flags & LKM_OVER, underFlag = flags & LKM_UNDER, existFlag = flags & LKM_EXIST, reallocFlag = flags & LKM_REALLOC;
-    // printf("flags: %i reg: %i, init: %i, over: %i, under: %i, exist: %i, realloc: %i \n", flags, regFlag, initFlag, overFlag, underFlag, existFlag, reallocFlag);
-    // TODO  Double Malloc
     if(flags == 0){
         regFlag += 1;
     } else {
@@ -186,7 +160,6 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
 
 int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNum, bool ending){
     int regFlag = 0, approxFlag = flags & LKF_APPROX, warnFlag = flags & LKF_WARN, unknownFlag = flags & LKF_UNKNOWN, errorFlag = flags & LKF_ERROR;
-    // printf("reg: %i, approx: %i, warn: %i, unknown: %i, error: %i \n", regFlag, approxFlag, warnFlag, unknownFlag, errorFlag);
 
     if(flags == 0){
         regFlag += 1;
@@ -282,7 +255,6 @@ int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNu
         if(unknownFlag){
             fprintf(stderr, "Error: Tried to free pointer that was never allocated.\n");
             fprintf(stderr, "Error: Orphan free passed, pointer passed was never allocated. \n");
-            // TODO  Orphan free case
             addFreeToList(&bad_free_ll, ptr, (char*)fileName, (char*)fxName, -EINVAL, lineNum, flags, current_time.tv_sec, current_time.tv_usec, ORPHAN_FREE);
             if(errorFlag){
                 exit(EXIT_FAILURE);
@@ -294,8 +266,12 @@ int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNu
     return -errno;
 }
 
+void lkreport_wrapper(int stat, void* args){
+    lkreport(1, 63);
+    return;
+}
+
 int lkreport(int fd, u_int flags){
-    // NOTE  Difference between LKR_BAD_FREE and LKR_APPROX
     int noneFlag = 0, seriousFlag = flags & LKR_SERIOUS, matchFlag = flags & LKR_MATCH, badFreeFlag = flags & LKR_BAD_FREE, orphanFreeFlag = flags & LKR_ORPHAN_FREE, doubleFreeFlag = flags & LKR_DOUBLE_FREE, approxFlag = flags & LKR_APPROX;
     
     #ifdef EXTRA_CREDIT
@@ -437,10 +413,11 @@ int ptrInMiddleOfBlock(void** curPtr){
 }
 
 int lkcleanup(){
-    // TODO  Go through all keys of the table to free and add to respective free list.
     g_hash_table_destroy(mem_node_table);
     g_hash_table_destroy(all_free);
     g_slist_free_full(memleak_ll, freeNode);
+    g_slist_free_full(bad_free_ll, freeNode);
+    g_slist_free_full(good_free_ll, freeNode);
     return 0;
 }
 
