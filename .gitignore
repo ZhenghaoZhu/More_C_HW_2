@@ -1,3 +1,5 @@
 build/
 lkmalloc
 *Test.sh
+test.csv
+liblkmalloc.a

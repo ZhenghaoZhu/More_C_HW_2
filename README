@@ -1,17 +1,23 @@
 Empty README for HW2
 
 
-lkmalloc(10, &testMalloc2, 0);
+void* testMalloc;
+    void* testMalloc2;
+    void* testMalloc3;
+    lkmalloc(10, &testMalloc, 0);
     MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
     if(curPointer != NULL){
         printf("%i \n", curPointer->sizeOrFlags);
     } else {
         printf("Sadness \n");
     }
-    lkmalloc(20, &testMalloc, 24); // NOTE  Weird bug with this line and line 22, 10 + 20
+    lkmalloc(11, &testMalloc, 0x14);
     curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
     if(curPointer != NULL){
-        printf("%i \n", curPointer->sizeOrFlags);
+        printf("%i \n", curPointer->underPadding);
     } else {
         printf("Sadness \n");
     }
+    printf("Table size: %i \n", g_hash_table_size(mem_node_table));
+    void* approxMalloc = testMalloc + (sizeof(char)*20);
+    lkfree(&approxMalloc, 12);

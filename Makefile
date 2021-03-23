@@ -51,8 +51,7 @@ clean:
 		rm $(EXEC)
 
 wipe:
-		rm -rf $(BLDD)
-		rm -rf $(EXEC)
+		rm test.csv
 
 
 
