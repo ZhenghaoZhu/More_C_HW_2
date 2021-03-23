@@ -31,6 +31,8 @@ int lkinit(){
 
 int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxName, int lineNum){
     int regFlag = 0, initFlag = flags & LKM_INIT, overFlag = flags & LKM_OVER, underFlag = flags & LKM_UNDER, existFlag = flags & LKM_EXIST, reallocFlag = flags & LKM_REALLOC;
+
+
     if(flags == 0){
         regFlag += 1;
     } else {
@@ -44,6 +46,11 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
 
     if(mem_node_table == NULL){
         lkinit();
+    }
+
+    if(ptr == NULL){
+        fprintf(stderr, "ptr was NULL, please try again \n");
+        return -EINVAL;
     }
 
     if(initFlag + reallocFlag == 0){
@@ -69,6 +76,7 @@ int lkmalloc_def(u_int size, void **ptr, u_int flags, char* fileName, char* fxNa
     }
     
 
+    // Under, over logic determining what to pad current pointer with.
     if(!underFlag && !overFlag){
         if(reallocFlag){
             *ptr = realloc(*ptr, size);
@@ -177,6 +185,13 @@ int lkfree_def(void **ptr, u_int flags, char* fileName, char* fxName, int lineNu
 
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
+
+    if(ptr == NULL){
+        fprintf(stderr, "Trying to free ptr that is NULL, please try again \n");
+        addFreeToList(&bad_free_ll, ptr, (char*)fileName, (char*)fxName, -EINVAL, lineNum, flags, current_time.tv_sec, current_time.tv_usec, ORPHAN_FREE);
+        return -EINVAL;
+    }
+
     MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, *ptr);
     
     bool wasMiddle = false;
@@ -377,6 +392,7 @@ int lkreport(int fd, u_int flags){
     return count;
 }
 
+// Add the not-freed pointers in mem_node_table
 void addMemTableKeys(){
     guint keyCount = 0;
     guint* keyCountP = &keyCount;
@@ -391,6 +407,7 @@ void addMemTableKeys(){
 }
 
 
+// Check if pointer passed is allocated and in the middle of an allocated block
 int ptrInMiddleOfBlock(void** curPtr){
     if(g_hash_table_lookup(mem_node_table, *curPtr) != NULL){
         return 0;
@@ -412,6 +429,7 @@ int ptrInMiddleOfBlock(void** curPtr){
     return -1;
 }
 
+// Clean up all data structures
 int lkcleanup(){
     g_hash_table_destroy(mem_node_table);
     g_hash_table_destroy(all_free);
@@ -421,6 +439,7 @@ int lkcleanup(){
     return 0;
 }
 
+// Add new allocated block to hash table
 int addNodeToTable(void** curPtr, char* curFxName, char* curFileName, int curRecType, int curLineNum, int mallocedSize, int curSizeOrFlags, int curRetVal, long curSecs, long curMSecs, bool curUnder, bool curOver){
     MALLOC_NODE_INFO *curNode = g_new(MALLOC_NODE_INFO, 1);
     curNode->curPtr = *curPtr;
@@ -439,6 +458,7 @@ int addNodeToTable(void** curPtr, char* curFxName, char* curFileName, int curRec
     return 0;
 }
 
+// Add free record to respective linked list
 int addFreeToList(GSList** curList, void** curPtr, char* curFileName, char* curFxName, int curRetVal, int curLineNum, int curFlags, long curSecs, long curMSecs, int curFreeType){
     MALLOC_NODE_INFO* curMallocNode = NULL;
     if(curPtr == NULL || *curPtr == NULL){

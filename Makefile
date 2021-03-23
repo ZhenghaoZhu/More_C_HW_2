@@ -3,8 +3,7 @@ SRCD := src
 BLDD := build
 INCD := include
 BN := bin
-TS := tests
-# TFLD := testFiles
+TESTSRC := tests
 
 MAIN  := $(BLDD)/main.o
 
@@ -46,14 +45,15 @@ $(BLDD)/%.o: $(SRCD)/%.c
 
 depend:
 		make all
-		ar rcs tests/lkmalloc.a $(ALL_OBJF)
+		ar rcs tests/liblkmalloc.a $(ALL_OBJF)
 
 clean:
 		rm -rf $(BLDD)
 
 tests:
-		$(TS)/test1.sh 
-		$(TS)/test2.sh
+		$(TESTSRC)/test1.sh 
+		$(TESTSRC)/test2.sh
+		$(TESTSRC)/test3.sh
 
 .PRECIOUS: $(BLDD)/*.d
 -include $(BLDD)/*.d

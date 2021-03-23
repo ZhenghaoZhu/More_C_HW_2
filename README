@@ -1,23 +1,45 @@
-Empty README for HW2
+HW2 README FILE
 
+I created some wrapper functions in lkmalloc.h for lkmalloc, lkfree, lkreport. 
 
-void* testMalloc;
-    void* testMalloc2;
-    void* testMalloc3;
-    lkmalloc(10, &testMalloc, 0);
-    MALLOC_NODE_INFO* curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
-    if(curPointer != NULL){
-        printf("%i \n", curPointer->sizeOrFlags);
-    } else {
-        printf("Sadness \n");
-    }
-    lkmalloc(11, &testMalloc, 0x14);
-    curPointer = (MALLOC_NODE_INFO*)g_hash_table_lookup(mem_node_table, testMalloc);
-    if(curPointer != NULL){
-        printf("%i \n", curPointer->underPadding);
-    } else {
-        printf("Sadness \n");
-    }
-    printf("Table size: %i \n", g_hash_table_size(mem_node_table));
-    void* approxMalloc = testMalloc + (sizeof(char)*20);
-    lkfree(&approxMalloc, 12);
+How to run program: 
+1) Go to ../hw2-zhenzhu
+2) Run the following command: "make tests"
+    2a) The aforementioned command will run test*.sh files in the tests directory.
+
+On_exit:
+When the program exits it calls lkreport_wrapper which calls lkreport which prints out all the freed/malloced pointers from the multiple lists I 
+use throughout the implementation of the library.
+
+Function calls:
+When trying to use lkmalloc or lkfree, you will be using the wrappers which are in lkmalloc.h. These 2 wrappers called lkmalloc_def and lkfree_def respectively.
+
+Running the command "make depends" creates a static library lkmalloc.a which is used throughout the testing and can be used when writing other files which use lkmalloc
+
+Folders:
+include/ Contains the single .h file used for lkamlloc
+output/ Contains the binaries from the 3 test .c files in the tests directory
+src/ Contains the single .c file which is the implementation of lkmalloc
+tests/ Contains the .c files which are used to test lkmalloc and the .sh files to automate the process of compiling and running.
+
+Documentation Used:
+    https://developer.gnome.org/glib/stable/glib-data-types.html
+    https://man7.org/linux/man-pages/man2/gettimeofday.2.html
+
+Testing using Valgrind:
+    Run the following command: valgrind make tests to look at the memory allocation
+    NOTE: There will be a lot of memory that is still reachable, this is due to glib and its data structures
+
+LOGIC OF THE PROGRAM
+    The logic relies 2 hash tables and 3 linked lists, all of them are provided by glib.
+
+    mem_node_table - This hash table stores all currently alloced pointers. This is used to check if the pointer passed was already alloced in lkfree
+    and lk_malloc. The logic of double pointers and orphan frees solely relies on this data structure.
+
+    all_free - This hash table stores all the times lkfree was called, either sucessfully or unsuccessfully.
+
+    memleak_ll - This linked list specifically stores frees or allocs that produce memory leaks
+
+    bad_free_ll - This stores all other frees which are not appriate such as double frees and approximate frees.
+
+    good_free_ll - This stores all the good frees that didnt have any problems.
